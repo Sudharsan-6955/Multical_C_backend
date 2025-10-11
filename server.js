@@ -114,15 +114,30 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Root route - this will handle https://multical-c-backend.onrender.com/
 app.get('/', (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const localUrl = `http://localhost:${PORT}`;
+  const renderUrl = 'https://multical-c-backend.onrender.com';
+  
   res.status(200).json({
     message: 'MultiCalc Backend Server is Running! 🚀',
     status: 'Active',
     version: '1.0.0',
+    deployment: {
+      environment: process.env.NODE_ENV || 'development',
+      localhost: localUrl,
+      production: renderUrl,
+      current: isProduction ? renderUrl : localUrl
+    },
     endpoints: {
       health: '/api/health',
       auth: '/api/auth',
       signup: '/api/auth/signup',
       login: '/api/auth/login'
+    },
+    instructions: {
+      local_development: `Run locally at: ${localUrl}`,
+      production_access: `Access production at: ${renderUrl}`,
+      health_check: `Check health at: ${isProduction ? renderUrl : localUrl}/api/health`
     },
     timestamp: new Date().toISOString()
   });
@@ -137,19 +152,37 @@ app.get('/api/health', (req, res) => {
     2: 'Connecting',
     3: 'Disconnecting'
   };
+  
+  const isProduction = process.env.NODE_ENV === 'production';
+  const localUrl = `http://localhost:${PORT}`;
+  const renderUrl = 'https://multical-c-backend.onrender.com';
 
   res.status(200).json({
     status: 'OK',
     message: 'MultiCalc Backend API is healthy',
+    server: {
+      environment: process.env.NODE_ENV || 'development',
+      localhost: localUrl,
+      production: renderUrl,
+      current_url: isProduction ? renderUrl : localUrl,
+      port: PORT
+    },
     database: {
       status: dbStatus[dbState] || 'Unknown',
       state: dbState,
       name: mongoose.connection.name || 'Not connected',
       host: mongoose.connection.host || 'Not connected'
     },
+    project_links: {
+      backend_local: localUrl,
+      backend_production: renderUrl,
+      frontend_local: 'http://localhost:5173',
+      api_health: `${isProduction ? renderUrl : localUrl}/api/health`,
+      api_signup: `${isProduction ? renderUrl : localUrl}/api/auth/signup`,
+      api_login: `${isProduction ? renderUrl : localUrl}/api/auth/login`
+    },
     uptime: process.uptime(),
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -178,6 +211,16 @@ app.use((err, req, res, next) => {
 
 // Start the server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const localUrl = `http://localhost:${PORT}`;
+  const renderUrl = 'https://multical-c-backend.onrender.com';
+  
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Local URL: ${localUrl}`);
+  console.log(`🌐 Production URL: ${renderUrl}`);
+  console.log(`🔍 Health Check: ${isProduction ? renderUrl : localUrl}/api/health`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
 
 module.exports = app;
