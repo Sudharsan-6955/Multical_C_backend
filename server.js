@@ -22,8 +22,35 @@ if (!mongoUri) {
 
 // Connect to MongoDB
 mongoose.connect(mongoUri)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => {
+    console.log('✅ Connected to MongoDB successfully');
+    console.log('Database Name:', mongoose.connection.name);
+    console.log('Connection State:', mongoose.connection.readyState);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err);
+    console.error('Connection String (masked):', mongoUri.replace(/\/\/.*@/, '//***:***@'));
+  });
+
+// MongoDB connection event listeners
+mongoose.connection.on('connected', () => {
+  console.log('🔗 Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ Mongoose connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ Mongoose disconnected from MongoDB');
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await mongoose.connection.close();
+  console.log('🔒 MongoDB connection closed through app termination');
+  process.exit(0);
+});
 
 // USER COLLECTION SCHEMA DEFINITION
 const userSchema = new mongoose.Schema({
@@ -103,12 +130,26 @@ app.get('/', (req, res) => {
 
 // API Health check route
 app.get('/api/health', (req, res) => {
+  const dbState = mongoose.connection.readyState;
+  const dbStatus = {
+    0: 'Disconnected',
+    1: 'Connected',
+    2: 'Connecting',
+    3: 'Disconnecting'
+  };
+
   res.status(200).json({
     status: 'OK',
     message: 'MultiCalc Backend API is healthy',
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    database: {
+      status: dbStatus[dbState] || 'Unknown',
+      state: dbState,
+      name: mongoose.connection.name || 'Not connected',
+      host: mongoose.connection.host || 'Not connected'
+    },
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
