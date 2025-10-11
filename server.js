@@ -23,8 +23,10 @@ app.use(bodyParser.json());
 app.get('/', (req, res) => {
   res.json({ 
     status: 'OK', 
-    message: 'MultiCalc Backend Server is running',
-    timestamp: new Date().toISOString()
+    message: 'MultiCalc Backend Server is running successfully! 🚀',
+    timestamp: new Date().toISOString(),
+    uptime: `${Math.floor(process.uptime())} seconds`,
+    database: mongoose.connection.readyState === 1 ? 'Connected ✅' : 'Disconnected ❌'
   });
 });
 
@@ -32,24 +34,44 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     message: 'Server is healthy',
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
   });
 });
 
 // Check if MONGODB_URI is defined
 const mongoUri = process.env.MONGODB_URI;
 if (!mongoUri) {
-  console.error('MONGODB_URI environment variable is not defined');
-  process.exit(1);
-}
-
-// Connect to MongoDB
-mongoose.connect(mongoUri)
-  .then(() => console.log('✅ Connected to MongoDB'))
+  console.error('❌ MONGODB_URI environment variable is not defined');
+  console.log('Please set MONGODB_URI in your environment variables');
+} else {
+  console.log('✅ MONGODB_URI found, attempting connection...');
+  
+  // Connect to MongoDB with better error handling
+  mongoose.connect(mongoUri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+    socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+  })
+  .then(() => {
+    console.log('✅ Connected to MongoDB successfully');
+  })
   .catch(err => {
-    console.error('❌ MongoDB connection error:', err);
-    process.exit(1);
+    console.error('❌ MongoDB connection error:', err.message);
+    console.log('⚠️  Server will continue running without database connection');
+    console.log('💡 Please check your MONGODB_URI environment variable');
   });
+
+  // Handle MongoDB connection events
+  mongoose.connection.on('disconnected', () => {
+    console.log('⚠️  MongoDB disconnected');
+  });
+
+  mongoose.connection.on('reconnected', () => {
+    console.log('✅ MongoDB reconnected');
+  });
+}
 
 // USER COLLECTION SCHEMA DEFINITION
 const userSchema = new mongoose.Schema({
@@ -62,8 +84,19 @@ const userSchema = new mongoose.Schema({
 // THIS LINE DEFINES THE USER MODEL - COLLECTION WILL BE NAMED 'users'
 const User = mongoose.model('User', userSchema);
 
+// Middleware to check database connection
+const checkDbConnection = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.json({ 
+      success: false, 
+      message: 'Database connection unavailable. Please try again later.' 
+    });
+  }
+  next();
+};
+
 // Auth Routes
-app.post('/api/auth/signup', async (req, res) => {
+app.post('/api/auth/signup', checkDbConnection, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -97,7 +130,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', checkDbConnection, async (req, res) => {
   try {
     const { username, password } = req.body;
     
@@ -162,4 +195,10 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 CORS enabled for: https://multical-c.vercel.app`);
+  console.log(`🔗 Server URL: https://multical-c-backend.onrender.com`);
+  
+  if (!mongoUri) {
+    console.log('⚠️  Warning: Running without database connection');
+    console.log('💡 Set MONGODB_URI environment variable to enable database features');
+  }
 });
