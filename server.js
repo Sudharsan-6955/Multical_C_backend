@@ -85,6 +85,58 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Root route - this will handle https://multical-c-backend.onrender.com/
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'MultiCalc Backend Server is Running! 🚀',
+    status: 'Active',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      signup: '/api/auth/signup',
+      login: '/api/auth/login'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API Health check route
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'MultiCalc Backend API is healthy',
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler for unknown routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `The route ${req.originalUrl} does not exist on this server`,
+    availableRoutes: [
+      'GET /',
+      'GET /api/health',
+      'POST /api/auth/signup',
+      'POST /api/auth/login'
+    ]
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: 'Something went wrong on the server'
+  });
+});
+
 // Start the server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+module.exports = app;
