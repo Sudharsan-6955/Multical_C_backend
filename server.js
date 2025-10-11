@@ -51,10 +51,8 @@ if (!mongoUri) {
   mongoose.connect(mongoUri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 10000,
-    socketTimeoutMS: 45000,
-    family: 4,
-    maxPoolSize: 10
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+    socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
   })
   .then(() => {
     console.log('✅ Connected to MongoDB successfully');
