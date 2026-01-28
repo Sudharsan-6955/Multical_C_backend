@@ -3,8 +3,10 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const authenticateToken = require('./middleware/auth');
 
 // Fix Mongoose deprecation warnings
 mongoose.set('strictQuery', false);
@@ -18,6 +20,7 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
+app.use(cookieParser());
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -154,19 +157,49 @@ app.post('/api/auth/login', checkDbConnection, async (req, res) => {
       return res.json({ success: false, message: 'Invalid credentials' });
     }
 
-    // Create JWT token
+    // Create JWT token (expires in 2 hours)
     const token = jwt.sign(
       { userId: user._id, username: user.username },
       process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '24h' }
+      { expiresIn: '2h' }
     );
 
+    // Set httpOnly cookie (more secure than localStorage)
+    res.cookie('authToken', token, {
+      httpOnly: true,  // Cannot be accessed by JavaScript (XSS protection)
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'strict', // CSRF protection
+      maxAge: 2 * 60 * 60 * 1000 // 2 hours
+    });
+
     console.log(`✅ User logged in: ${username}`);
-    res.json({ success: true, message: 'Login successful', token });
+    res.json({ success: true, message: 'Login successful', token }); // Also send token for backwards compatibility
   } catch (error) {
     console.error('❌ Login error:', error);
     res.json({ success: false, message: 'Error logging in' });
   }
+});
+
+// Token verification endpoint
+app.get('/api/auth/verify', authenticateToken, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Token is valid',
+    user: {
+      userId: req.user.userId,
+      username: req.user.username
+    }
+  });
+});
+
+// Logout endpoint to clear cookie
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // Catch all for undefined routes
@@ -178,7 +211,8 @@ app.all('*', (req, res) => {
       'GET /',
       'GET /api/health',
       'POST /api/auth/signup',
-      'POST /api/auth/login'
+      'POST /api/auth/login',
+      'GET /api/auth/verify'
     ]
   });
 });
